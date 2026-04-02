@@ -115,24 +115,34 @@ def main() -> int:
             lambda: build_yolo_model(project_dir, args.dry_run, args.yes),
         ))
 
-    if not args.skip_volume:
+    def prompt_and_create_nfs():
         if prompt_yes_no("\nDo you want to setup an NFS Docker volume for storage?", default=True, auto_yes=args.yes):
-            steps.append((
-                "NFS Docker volume",
-                lambda: create_nfs_volume(env, args.dry_run),
-            ))
+            create_nfs_volume(env, args.dry_run)
+        else:
+            log_info("Skipping NFS Docker volume setup.")
+
+    if not args.skip_volume:
+        steps.append((
+            "NFS Docker volume",
+            prompt_and_create_nfs,
+        ))
 
     steps.append((
         "docker-compose.yaml configuration",
         lambda: configure_docker_compose(project_dir, env, args.dry_run),
     ))
 
-    if not args.skip_plist:
+    def prompt_and_install_launchd():
         if prompt_yes_no("\nDo you want to setup a launchctl autostart service?", default=True, auto_yes=args.yes):
-            steps.append((
-                "launchctl autostart service",
-                lambda: install_launchd_service(project_dir, args.dry_run),
-            ))
+            install_launchd_service(project_dir, args.dry_run)
+        else:
+            log_info("Skipping launchctl autostart service setup.")
+
+    if not args.skip_plist:
+        steps.append((
+            "launchctl autostart service",
+            prompt_and_install_launchd,
+        ))
 
     if not args.skip_power:
         steps.append((
@@ -191,8 +201,8 @@ def main() -> int:
             "\nNext steps:\n"
             "  1. Verify Frigate is running: docker compose ps\n"
             "  2. Open the Web UI: http://localhost:8971\n"
-            "  3. Check boot log: tail -f boot.log\n"
-            "  4. Check detector: tail -f detector.log\n"
+            "  3. Check boot log: tail -f ~/Library/Logs/FrigateNVR/boot.log\n"
+            "  4. Check detector: tail -f ~/Library/Logs/FrigateNVR/detector.log\n"
         )
         return 0
     else:
