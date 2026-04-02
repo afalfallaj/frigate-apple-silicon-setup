@@ -1,0 +1,18 @@
+version: 0.17-0
+
+detectors:
+  apple-silicon:
+    type: zmq
+    endpoint: tcp://host.docker.internal:5555
+
+model:
+  model_type: yolo-generic
+  width: 640
+  height: 640
+  input_tensor: nchw
+  input_dtype: float
+  path: /config/model_cache/yolov9-s-640.onnx
+  labelmap_path: /config/model_cache/yolov9-t-labelmap.txt
+
+ffmpeg:
+  hwaccel_args: []

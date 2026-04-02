@@ -1,0 +1,52 @@
+services:
+  frigate:
+    container_name: frigate
+    image: ghcr.io/blakeblackshear/frigate:${FRIGATE_VERSION_TAG:-stable-standard-arm64}
+    restart: unless-stopped
+    # 1024 MB shared memory is recommended for 16+ cameras with ffmpeg
+    shm_size: "1024mb"
+
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+
+      # 1. Config — lives on this machine's local SSD
+      - ${LOCAL_CONFIG_DIR}:/config
+
+      # 2. Database — pinned to local SSD (never on a network drive)
+      - ${LOCAL_DB_DIR}:/media/frigate/db
+  
+      # Media — NFS-backed Docker volume (nocopy avoids permission init race)
+      - type: volume
+        source: nfs_storage_volume
+        target: /media/frigate
+        volume:
+          nocopy: true
+    ports:
+      - "8971:8971"   # Authenticated Web UI
+      - "8554:8554"   # RTSP feeds (go2rtc)
+      - "8555:8555"   # WebRTC
+      # - "5001:5000" # Internal unauthenticated access — expose carefully
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Enables NPU detector access
+
+    env_file:
+      - .env
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8971"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  # References the external Docker volume created by setup.sh
+  nfs_storage_volume:
+    external: true
