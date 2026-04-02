@@ -37,7 +37,7 @@ def create_nfs_volume(env: dict[str, str], dry_run: bool) -> None:
     )
 
     # Create the volume with NFS options
-    nfs_opts = f"addr={nfs_ip},nfsvers=3,rw,nolock,soft,noatime,noacl"
+    nfs_opts = f"addr={nfs_ip},nfsvers=4,tcp,rw,soft,noatime,noacl"
     run(
         [
             "docker", "volume", "create",
@@ -71,8 +71,8 @@ def create_nfs_volume(env: dict[str, str], dry_run: bool) -> None:
             log_warn("=" * 60)
             log_warn("NFS SERVER CONNECTION TIMEOUT:")
             log_warn(f"  OrbStack could not reach your NFS server at {nfs_ip}.")
-            log_warn("  1. Verify the NAS IP address is correct.")
-            log_warn("  2. Ensure your NAS allows NFSv3 connections (we use nfsvers=3).")
+            log_warn("  1. Verify the NFS server IP address is correct.")
+            log_warn("  2. Ensure your NFS server allows NFS connections.")
             log_warn("  3. Check if a firewall is blocking port 2049.")
             log_warn("=" * 60)
         raise e
