@@ -45,8 +45,16 @@ Before running the setup script, ensure you have a container runtime installed:
 
 ## Quick Start
 
+> [!WARNING]
+> **Protected Folders & macOS TCC**
+> Do **not** install this setup inside `~/Desktop`, `~/Documents`, or `~/Downloads`. macOS Transparency, Consent, and Control (TCC) gatekeeper will silently block the background `launchd` service from reading configurations in these directories.
+> 
+> **Recommended Installation Paths:** Keep the setup inside your home folder but outside of protected directories. For example: `~/frigate` or `~/services/frigate`. Do not use system root paths (`/opt` or `/services`) as macOS Read-Only system volumes strictly forbid it without overriding SIP.
+
 ```bash
-# 1. Clone the repo
+# 1. Clone the repo to a safe user directory (e.g. ~/services/frigate)
+mkdir -p ~/services
+cd ~/services
 git clone https://github.com/afalfallaj/frigate-apple-silicon-setup.git frigate
 cd frigate
 
@@ -103,7 +111,7 @@ Copy `.env.example` to `.env` and set all values. The `.env` file is **git-ignor
 
 ```dotenv
 # Media Storage (Leave NFS_IP blank for local SSD storage)
-LOCAL_MEDIA_DIR=/opt/frigate/media
+LOCAL_MEDIA_DIR=./media
 NFS_IP=192.168.1.x
 NFS_SHARE_PATH=/volume1/frigate_media
 
@@ -111,7 +119,7 @@ NFS_SHARE_PATH=/volume1/frigate_media
 FRIGATE_VERSION_TAG=stable-standard-arm64
 
 # Local path for Frigate config files
-LOCAL_CONFIG_DIR=/opt/frigate/config
+LOCAL_CONFIG_DIR=./config
 
 # RTSP credentials (consumed by Frigate internally)
 FRIGATE_RTSP_USER=viewer
