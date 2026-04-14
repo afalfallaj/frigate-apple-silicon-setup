@@ -153,10 +153,16 @@ def main() -> int:
             prompt_and_install_launchd,
         ))
 
+    def prompt_and_configure_power():
+        if prompt_yes_no("\nDo you want to apply macOS Server Power Settings?", default=True, auto_yes=args.yes):
+            configure_power_settings(args.dry_run)
+        else:
+            log_info("Skipping macOS power settings.")
+
     if not args.skip_power:
         steps.append((
             "macOS power settings",
-            lambda: configure_power_settings(args.dry_run),
+            prompt_and_configure_power,
         ))
 
     failed = False

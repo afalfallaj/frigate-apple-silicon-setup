@@ -1,6 +1,6 @@
 import sys
 from .log import log_info, log_ok, log_warn, log_section
-from .runner import run
+from .runner import run, prompt_yes_no
 
 # Known macOS defaults (Apple Silicon / macOS 13+)
 _APPLE_DEFAULTS = {
@@ -72,11 +72,7 @@ def revert_power_settings(dry_run: bool, force_yes: bool = False) -> None:
     print()
 
     if not force_yes:
-        if not sys.stdin.isatty():
-            log_warn("Non-interactive mode: skipping power revert (requires confirmation).")
-            return
-        answer = input("  Apply these defaults? [y/N] ").strip().lower()
-        if answer != "y":
+        if not prompt_yes_no("  Apply these defaults?", default=False, auto_yes=False):
             log_info("Skipped power settings revert.")
             return
 
