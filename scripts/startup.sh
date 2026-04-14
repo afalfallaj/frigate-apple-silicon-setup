@@ -1,10 +1,8 @@
 #!/bin/zsh
 # startup.sh — Frigate NVR Boot Wrapper
 # ======================================
-# NOTE: This file is the *template* kept in the repository.
-# During setup.sh execution (Step E), a fully-configured 'start_frigate.sh'
-# is generated in this same directory and registered with launchctl instead.
-# You can also invoke this script manually for testing.
+# This script is registered with launchctl to manage both the Docker 
+# containers and the FrigateDetector service on system boot.
 #
 # All paths are resolved dynamically — no hardcoded usernames or directories.
 
