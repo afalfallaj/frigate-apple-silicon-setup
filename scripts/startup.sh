@@ -70,16 +70,21 @@ echo "Starting Frigate containers..."
 cd "$PROJECT_DIR"
 "$DOCKER_BIN" compose up -d
 
-# ── FrigateDetector ───────────────────────────────────────────────────────────
-DETECTOR_SCRIPT="$SCRIPT_DIR/headless_detector.sh"
-if [[ -f "$DETECTOR_SCRIPT" ]]; then
-    echo "Launching FrigateDetector..."
-    # Rotate detector log
-    [ -f "$LOG_DIR/detector.log" ] && mv -f "$LOG_DIR/detector.log" "$LOG_DIR/detector.old.log" 2>/dev/null
-
-    # exec replaces this shell — launchd will track the detector's PID directly
-    exec /bin/zsh "$DETECTOR_SCRIPT" > "$LOG_DIR/detector.log" 2>&1
+# ── FrigateDetector Status Check ─────────────────────────────────────────────
+DETECTOR_CLI="/Applications/FrigateDetector.app/Contents/MacOS/detector"
+if [[ -x "$DETECTOR_CLI" ]]; then
+    echo "Checking FrigateDetector status..."
+    # Parse first line of 'detector status' for the running indicator (● = running, ○ = stopped)
+    STATUS_LINE=$("$DETECTOR_CLI" status 2>/dev/null | head -1)
+    if [[ "$STATUS_LINE" == ○* ]]; then
+        echo "FrigateDetector is stopped. Starting..."
+        "$DETECTOR_CLI" start --daemon
+        echo "FrigateDetector started."
+    else
+        echo "FrigateDetector is already running."
+    fi
 else
-    echo "WARNING: headless_detector.sh not found at '$DETECTOR_SCRIPT'."
-    echo "Run './setup.sh' to generate it."
+    echo "WARNING: FrigateDetector.app not found at /Applications/FrigateDetector.app"
+    echo "Install it from: https://github.com/frigate-nvr/apple-silicon-detector/releases"
 fi
+echo "--- Boot sequence completed at $(date) ---"

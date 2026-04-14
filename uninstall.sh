@@ -44,13 +44,37 @@ else
     echo "${_YELLOW}Python3 not found, skipping power revert.${_RESET}\n"
 fi
 
-echo "${_BOLD}[4/4] Removing downloaded FrigateDetector.app...${_RESET}"
+echo "${_BOLD}[4/4] Removing FrigateDetector...${_RESET}"
+# Stop and disable the detector service
+DETECTOR_CLI="/Applications/FrigateDetector.app/Contents/MacOS/detector"
+if [ -x "$DETECTOR_CLI" ]; then
+    "$DETECTOR_CLI" stop 2>/dev/null || true
+    "$DETECTOR_CLI" startup disable 2>/dev/null || true
+    echo "${_GREEN}Detector service stopped and startup disabled.${_RESET}"
+fi
+
+# Remove app from /Applications/ (new location)
+if [ -d "/Applications/FrigateDetector.app" ]; then
+    rm -rf "/Applications/FrigateDetector.app"
+    echo "${_GREEN}FrigateDetector.app removed from /Applications.${_RESET}"
+fi
+
+# Remove old app from project directory (legacy location)
 if [ -d "FrigateDetector.app" ]; then
     rm -rf "FrigateDetector.app"
-    echo "${_GREEN}FrigateDetector.app removed from project directory.${_RESET}\n"
-else
-    echo "${_YELLOW}FrigateDetector.app not found.${_RESET}\n"
+    echo "${_GREEN}Old FrigateDetector.app removed from project directory.${_RESET}"
 fi
+
+# Clean up CLI symlink
+if [ -L "$HOME/.local/bin/detector" ]; then
+    rm -f "$HOME/.local/bin/detector"
+    echo "${_GREEN}Detector CLI symlink removed.${_RESET}"
+fi
+
+if [ ! -d "/Applications/FrigateDetector.app" ] && [ ! -d "FrigateDetector.app" ]; then
+    echo "${_YELLOW}FrigateDetector.app was not found in either location.${_RESET}"
+fi
+echo ""
 
 echo "${_BOLD}${_CYAN}============================================================${_RESET}"
 echo "${_GREEN}Uninstallation logic finished!${_RESET}"

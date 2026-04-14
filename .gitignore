@@ -2,7 +2,7 @@
 # Frigate Apple Silicon — .gitignore
 # ============================================================
 
-# --- Private app bundle ---
+# --- Legacy app bundle (prevent accidental inclusion) ---
 FrigateDetector.app/
 
 # --- Environment / Secrets ---

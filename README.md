@@ -11,10 +11,10 @@ This repository provides an automated `setup.sh` script that wires together:
 | Component | Role |
 |---|---|
 | **OrbStack** | Docker runtime optimised for Apple Silicon |
-| **FrigateDetector** | NPU-accelerated object detection (Apple Neural Engine) |
-| **YOLOv9 ONNX** | Custom model built for Frigate |
+| **FrigateDetector** | Standalone NPU detector installed to `/Applications/` |
+| **YOLOv9 ONNX** | Custom model built for Frigate (auto-loaded via ZMQ) |
 | **NFS Server** | NFS-mounted media storage volume |
-| **launchctl** | macOS service manager — starts Frigate on boot |
+| **launchctl** | macOS service manager — starts Frigate (+ checks detector) |
 
 ---
 
@@ -24,7 +24,7 @@ Setting up a highly performant NVR like Frigate natively on macOS Apple Silicon 
 
 This project was built to completely eliminate that complexity. 
 
-By wrapping the entire deployment into a reliable, idempotent Python backend, you get a **seamless, plug-and-play setup experience**. Run one command, and the script handles the Docker runtime, builds the specific ONNX ML models optimized for your chip, attaches the Apple Neural Engine detector, and automatically hooks it into the native macOS boot sequence (`launchctl`). It's designed so you can forget about the underlying infrastructure and just enjoy a robust Frigate instance.
+By wrapping the entire deployment into a reliable, idempotent Python backend, you get a **seamless, plug-and-play setup experience**. Run one command, and the script handles the Docker runtime, builds the specific ONNX ML models optimized for your chip, installs the standalone Apple Silicon Detector app to `/Applications/`, and automatically hooks everything into the native macOS boot sequence (`launchctl`). It's designed so you can forget about the underlying infrastructure and just enjoy a robust Frigate instance.
 
 ---
 
@@ -34,6 +34,9 @@ Before running the setup script, ensure you have a container runtime installed:
 - **OrbStack** (Container runtime, highly recommended over Docker Desktop for native Apple Silicon virtualization). 
   - Download and install from [orbstack.dev](https://orbstack.dev/).
   - **Important:** Launch the app once and complete any macOS Gatekeeper/permissions prompts before running the script.
+- **FrigateDetector.app** (Standalone detector app).
+  - `setup.sh` will offer to download and install this for you to `/Applications/`.
+  - Alternatively, you can pre-install it from [here](https://github.com/frigate-nvr/apple-silicon-detector/releases).
 
 `setup.sh` will automatically download these system dependencies if missing:
 - **Homebrew**
@@ -94,7 +97,7 @@ Options:
 | Step | Action |
 |---|---|
 | **A · Runtime Checks** | Validates macOS arm64, Homebrew, Homebrew Python, and detects Docker runtime (recommends OrbStack). |
-| **B · Detector** | Downloads `FrigateDetector.app` from GitHub Releases (latest or pinned tag). Skips if already present (prompts to update). |
+| **B · Detector** | Installs `FrigateDetector.app` to `/Applications/` (latest or pinned tag). Prompts for download and handles DMG mounting. |
 | **C · YOLOv9 Model** | Runs `docker build` on `docker/yolov9/Dockerfile` to produce a YOLOv9-t ONNX model at `config/model_cache/`. Skips if outputs exist (prompts to rebuild). |
 | **D1 · NFS Volume** | Creates (or recreates) the `nfs_storage_volume` Docker volume from `.env` values. Smoke-tests the mount. |
 | **D2 · Compose** | Regenerates `docker-compose.yaml` with dynamic paths sourced from `.env` using `docker/template.*.yaml`. |
@@ -144,48 +147,58 @@ FRIGATE_RTSP_PASSWORD=changeme
 │   ├── template.local.yaml   ← Local Storage template
 │   └── template.nfs.yaml     ← NFS Storage template
 ├── scripts/
-│   ├── startup.sh            ← Boot script
-│   └── headless_detector.sh  ← Detector launcher
+│   └── startup.sh            ← Boot script (starts Frigate + checks detector)
 │
 ├── config/
 │   ├── config.yaml           ← Your Frigate configuration (16-camera setup)
 │   └── config-example.yaml   ← Reference config
 ```
 
-> **`FrigateDetector.app/`** is downloaded by `setup.sh` and excluded from git.
+> **`FrigateDetector.app`** is installed to `/Applications/` and managed via the `detector` CLI.
 
 ---
 
-## Managing the Service
-
-After `setup.sh` completes, use standard `launchctl` commands:
+### Frigate Service (launchctl)
+After `setup.sh` completes, use standard `launchctl` commands for Frigate:
 
 ```bash
 # Check status
 launchctl print gui/$(id -u)/com.frigate.nvr
 
-# Start immediately (without waiting for reboot)
+# Start immediately
 launchctl kickstart -k gui/$(id -u)/com.frigate.nvr
 
 # Stop
 launchctl kill TERM gui/$(id -u)/com.frigate.nvr
+```
 
-# Remove from autostart
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.frigate.nvr.plist
+### Detector Service (CLI)
+The Apple Silicon Detector is now managed via its own CLI tool:
+
+```bash
+# Check status
+detector status
+
+# Start service
+detector start --daemon
+
+# Stop service
+detector stop
+
+# View live logs
+detector logs -f
 ```
 
 ---
 
-## Logs
-
 | File | Contents |
 |---|---|
 | `~/Library/Logs/FrigateNVR/boot.log` | OrbStack + Docker Compose startup output |
-| `~/Library/Logs/FrigateNVR/detector.log` | FrigateDetector Python core output |
+| `~/Library/Logs/FrigateDetector/detector.log` | Apple Silicon Detector output |
 
 ```bash
 tail -f ~/Library/Logs/FrigateNVR/boot.log        # Watch the boot sequence
-tail -f ~/Library/Logs/FrigateNVR/detector.log    # Watch the NPU detector
+detector logs -f                                  # Watch the NPU detector
 ```
 
 ---
@@ -201,12 +214,14 @@ Then re-run: `./setup.sh --skip-detector --skip-model --skip-plist`
 
 ### Frigate UI unreachable after boot
 Check `boot.log` — OrbStack may not have finished starting before Docker was polled.
-The start script retries for 120 seconds; if that's insufficient on your machine,
-increase the loop count in `startup.sh`.
+The start script retries for 120 seconds.
 
 ### Detector not detecting
-Check `detector.log`. Ensure `FrigateDetector.app` is present and that the inner
-`venv/` was created successfully during the app's first launch.
+Run `detector status`. Ensure the detector is running and bound to the correct ports.
+Check `detector logs -f` for inference errors.
+
+### Migration for existing users
+If you are upgrading from an older version of this setup, it is highly recommended to manually clean up the old project-level `FrigateDetector.app` and its virtual environment before running the new setup.
 
 ### Re-running individual steps
 ```bash

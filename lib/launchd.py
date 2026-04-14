@@ -9,7 +9,7 @@ def install_launchd_service(
     project_dir: Path,
     dry_run: bool,
 ) -> None:
-    """Install a launchd user agent (.plist) to start Frigate on login/boot."""
+    """Install a launchd user agent (.plist) to start Frigate and check detector status."""
     log_section("Step E · launchctl Autostart Service")
 
     home_dir   = Path.home()

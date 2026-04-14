@@ -47,8 +47,17 @@ def show_status(project_dir: Path, env: dict[str, str]) -> None:
         log_warn("Docker: NOT FOUND")
 
     # Detector
-    detector = project_dir / "FrigateDetector.app"
-    log_info(f"Detector app: {'present' if detector.exists() else 'NOT FOUND'}")
+    detector_app = Path("/Applications/FrigateDetector.app")
+    log_info(f"Detector app: {'present in /Applications' if detector_app.exists() else 'NOT FOUND'}")
+    
+    detector_cli = detector_app / "Contents" / "MacOS" / "detector"
+    if detector_cli.exists():
+        result = run([str(detector_cli), "status"], capture=True, check=False)
+        if result.returncode == 0:
+            status_output = result.stdout.strip()
+            log_info("Detector Live Status:")
+            for line in status_output.splitlines():
+                log_info(f"  {line}")
 
     # Model
     model_dir = project_dir / "config" / "model_cache"
@@ -202,7 +211,8 @@ def main() -> int:
             "  1. Verify Frigate is running: docker compose ps\n"
             "  2. Open the Web UI: http://localhost:8971\n"
             "  3. Check boot log: tail -f ~/Library/Logs/FrigateNVR/boot.log\n"
-            "  4. Check detector: tail -f ~/Library/Logs/FrigateNVR/detector.log\n"
+            "  4. Check detector status: detector status\n"
+            "  5. View detector logs: detector logs -f\n"
         )
         return 0
     else:
