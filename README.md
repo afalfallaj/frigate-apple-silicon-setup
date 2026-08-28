@@ -12,7 +12,7 @@ This repository provides an automated `setup.sh` script that wires together:
 |---|---|
 | **OrbStack** | Docker runtime optimised for Apple Silicon |
 | **FrigateDetector** | Standalone NPU detector installed to `/Applications/` |
-| **YOLOv9 ONNX** | Custom model built for Frigate (auto-loaded via ZMQ) |
+| **YOLO ONNX** | Detection model built for Frigate — YOLOv9 or YOLO26 (auto-loaded via ZMQ) |
 | **NFS Server** | NFS-mounted media storage volume |
 | **launchctl** | macOS service manager — starts Frigate (+ checks detector) |
 
@@ -82,7 +82,8 @@ Options:
   --detector-tag TAG   Pin a specific detector release (e.g. v1.1.1).
                        Defaults to the latest GitHub release.
   --skip-detector      Skip FrigateDetector download.
-  --skip-model         Skip YOLOv9 ONNX model build (slow, ~5–15 min).
+  --skip-model         Skip ONNX model build (slow, ~5–15 min).
+  --model-family NAME  yolov9 (default) or yolo26s. Skips the family prompt.
   --skip-volume        Skip NFS Docker volume creation.
   --skip-plist         Skip launchctl service installation.
   --skip-power         Skip macOS power settings configuration (requires sudo).
@@ -98,13 +99,18 @@ Options:
 |---|---|
 | **A · Runtime Checks** | Validates macOS arm64, Homebrew, Homebrew Python, and detects Docker runtime (recommends OrbStack). |
 | **B · Detector** | Installs `FrigateDetector.app` to `/Applications/` (latest or pinned tag). Prompts for download and handles DMG mounting. |
-| **C · YOLOv9 Model** | Runs `docker build` on `docker/yolov9/Dockerfile` to produce a YOLOv9-t ONNX model at `config/model_cache/`. Skips if outputs exist (prompts to rebuild). |
+| **C · Model Build** | Prompts for a model family, then runs `docker build` on `docker/<family>/Dockerfile` to produce an ONNX model + labelmap at `config/model_cache/`. Skips if outputs exist (prompts to rebuild). |
 | **D1 · NFS Volume** | Creates (or recreates) the `nfs_storage_volume` Docker volume from `.env` values. Smoke-tests the mount. |
 | **D2 · Compose** | Regenerates `docker-compose.yaml` with dynamic paths sourced from `.env` using `docker/template.*.yaml`. |
 | **E · launchctl** | Writes `start_frigate.sh`, installs `~/Library/LaunchAgents/com.frigate.nvr.plist`, and bootstraps the service for the current user. |
 | **F · Power Config** | Configures macOS server power settings (prevent sleep, wake on LAN, auto-restart). |
 
 The script is **idempotent** — safe to re-run at any time.
+
+**Model families.** Step C builds either family the same way — same prompts, same
+`docker build`, same output in `config/model_cache/`. `yolov9` (default) picks a size and
+resolution; `yolo26s` picks an Ultralytics checkpoint name and resolution. Choose
+non-interactively with `--model-family`. Weights and ONNX files are never committed.
 
 ---
 
@@ -116,7 +122,7 @@ Copy `.env.example` to `.env` and set all values. The `.env` file is **git-ignor
 # Media Storage (Leave NFS_IP blank for local SSD storage)
 LOCAL_MEDIA_DIR=./media
 NFS_IP=192.168.1.x
-NFS_SHARE_PATH=/volume1/frigate_media
+NFS_SHARE_PATH=/export/frigate_media
 
 # Frigate image tag
 FRIGATE_VERSION_TAG=stable-standard-arm64
@@ -144,6 +150,9 @@ FRIGATE_RTSP_PASSWORD=changeme
 ├── docker/
 │   ├── yolov9/
 │   │   └── Dockerfile        ← Multi-stage build → YOLOv9 ONNX + labelmap
+│   ├── yolo26s/
+│   │   └── Dockerfile        ← Ultralytics export → YOLO26 ONNX + labelmap
+│   ├── healthcheck.sh        ← Storage/stream healthcheck (see Self-Healing)
 │   ├── template.local.yaml   ← Local Storage template
 │   └── template.nfs.yaml     ← NFS Storage template
 ├── scripts/
@@ -207,6 +216,31 @@ detector logs -f                                  # Watch the NPU detector
 
 If the NFS volume smoke-test fails with "operation not permitted", ensure your NFS server is configured to map users correctly (e.g. `no_root_squash` or `all_squash` mapped to a valid ID).
 Then re-run: `./setup.sh --skip-detector --skip-model --skip-plist`
+
+---
+
+## Self-Healing After an NFS Outage
+
+An NFS reboot leaves the mount stale: writes fail while Frigate still serves the UI, so a
+plain HTTP healthcheck reports **healthy** while nothing records. `docker/healthcheck.sh`
+(the compose healthcheck) also writes a canary to the media mount and checks camera fps,
+and an **`autoheal` sidecar** restarts frigate when Docker marks it unhealthy. That restart
+*is* the remount: the volume is refcounted, so stopping the last container using it unmounts.
+
+**Recording resumes on its own ~3–4 min after the server returns.** While the server is
+unreachable it waits rather than restarting; it acts only when the server is back but the
+mount is stale, or when every camera sits at 0 fps. Capped at ~4 restarts/hour, then it
+logs `CRITICAL` and stays up. The host detector is reported, never restarted — Docker
+cannot reach it.
+
+**Two things silently break this:** anything else mounting `nfs_storage_volume` (the
+refcount never drops, so the remount never happens), and editing `docker-compose.yaml`
+without mirroring into `docker/template.nfs.yaml` (`setup.sh` overwrites it).
+
+```bash
+docker inspect --format '{{range .State.Health.Log}}{{.Output}}{{end}}' frigate  # why it acted
+docker exec frigate touch /config/.force_unhealthy                               # test; rm to stop
+```
 
 ---
 

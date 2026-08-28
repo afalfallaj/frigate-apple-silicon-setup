@@ -15,7 +15,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--detector-tag", metavar="TAG", default=None, help="Specify a detector release tag (e.g. v1.1.1). Defaults to latest.")
     parser.add_argument("--skip-detector", action="store_true", help="Skip the FrigateDetector download step.")
-    parser.add_argument("--skip-model", action="store_true", help="Skip the YOLOv9 model build step.")
+    parser.add_argument("--skip-model", action="store_true", help="Skip the model build step.")
+    parser.add_argument("--model-family", metavar="NAME", default=None,
+                        choices=["yolov9", "yolo26s"],
+                        help="Model family to build: yolov9 (default) or yolo26s. Skips the prompt.")
     parser.add_argument("--skip-volume", action="store_true", help="Skip NFS Docker volume creation.")
     parser.add_argument("--skip-plist", action="store_true", help="Skip launchctl plist installation.")
     parser.add_argument("--skip-power", action="store_true", help="Skip macOS power settings configuration (requires sudo).")
@@ -120,8 +123,8 @@ def main() -> int:
 
     if not args.skip_model:
         steps.append((
-            "YOLOv9 model build",
-            lambda: build_yolo_model(project_dir, args.dry_run, args.yes),
+            "Model build",
+            lambda: build_yolo_model(project_dir, args.dry_run, args.yes, args.model_family),
         ))
 
     def prompt_and_create_nfs():

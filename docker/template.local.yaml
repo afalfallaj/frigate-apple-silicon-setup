@@ -5,17 +5,24 @@ services:
     restart: unless-stopped
     # 1024 MB shared memory is recommended for 16+ cameras with ffmpeg
     shm_size: "1024mb"
+    # Give Frigate time to close the SQLite database cleanly on restart.
+    stop_grace_period: 60s
+
+    labels:
+      # Watched by the autoheal sidecar below.
+      - autoheal=true
 
     volumes:
       - /etc/localtime:/etc/localtime:ro
 
-      # 1. Config — lives on this machine's local SSD
+      # 1. Config — lives on this machine's local SSD.
+      #    Frigate keeps frigate.db here too (it has no database.path override).
       - ${LOCAL_CONFIG_DIR}:/config
 
-      # 2. Database — pinned to local SSD (never on a network drive)
-      - ${LOCAL_DB_DIR}:/media/frigate/db
-  
-      # Media — bind-mounted directly from the local SSD
+      # 2. Storage/stream healthcheck — see the healthcheck: block below
+      - ./docker:/opt/frigate-scripts:ro
+
+      # 3. Media — bind-mounted directly from the local SSD
       - ${LOCAL_MEDIA_DIR}:/media/frigate
     ports:
       - "8971:8971"   # Authenticated Web UI
@@ -29,15 +36,39 @@ services:
     env_file:
       - .env
 
+    # Verifies the media directory is writable and the cameras are producing
+    # frames — not just that the web server answers. With no NFS_IP set the
+    # NFS-server reachability gate in the script is skipped automatically.
     healthcheck:
-      test: ["CMD", "curl", "-fk", "https://localhost:8971/api/version"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      test: ["CMD", "/opt/frigate-scripts/healthcheck.sh"]
+      interval: 60s
+      timeout: 45s
+      retries: 3
+      start_period: 180s
 
     logging:
       driver: "json-file"
       options:
         max-size: "50m"
         max-file: "5"
+
+  # Restarts frigate when the healthcheck above marks it unhealthy. Docker does
+  # not act on health status on its own — restart: unless-stopped only reacts to
+  # process exit, which a wedged go2rtc never triggers.
+  autoheal:
+    container_name: frigate-autoheal
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    network_mode: none
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 30
+      AUTOHEAL_START_PERIOD: 120
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

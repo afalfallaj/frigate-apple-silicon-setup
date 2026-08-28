@@ -1,4 +1,5 @@
-# docker build -t yolov9-onnx --build-arg MODEL_SIZE=t --build-arg IMG_SIZE=320 -o ../config/model_cache .
+# docker build -t yolov9-onnx --build-arg MODEL_SIZE=t --build-arg IMG_SIZE=320 \
+#   -o ../../config/model_cache -f Dockerfile .
 
 ARG MODEL_SIZE=c
 ARG IMG_SIZE=640

@@ -2,7 +2,9 @@ from pathlib import Path
 from .log import log_info, log_error, log_warn
 from .runner import SetupError
 
-REQUIRED_ENV_KEYS = ["LOCAL_CONFIG_DIR", "LOCAL_DB_DIR", "FRIGATE_VERSION_TAG"]
+# LOCAL_DB_DIR was dropped: Frigate has no database.path override, so frigate.db
+# already lives in LOCAL_CONFIG_DIR. Nothing mounts it any more.
+REQUIRED_ENV_KEYS = ["LOCAL_CONFIG_DIR", "FRIGATE_VERSION_TAG"]
 
 def load_env(env_path: Path) -> dict[str, str]:
     """
