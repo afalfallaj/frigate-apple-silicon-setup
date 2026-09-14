@@ -51,6 +51,7 @@ media/
 db/
 export/
 storage/
+web/
 
 # --- Docker artifacts ---
 # Note: docker-compose.yaml is generated from templates in docker/
