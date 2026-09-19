@@ -26,6 +26,11 @@ MAX_VERDICTS_PER_HOUR=12
 # Must match start_period in docker-compose.yaml. Docker suppresses restarts for
 # this long after a start, so verdicts inside the window are not actionable.
 STARTUP_GRACE=180
+# Last time any camera reported a completed inference (epoch seconds).
+DETECT_OK_FILE=/config/.healthcheck_detect_ok
+# How long detection may sit at zero, with cameras live, before we call it wedged.
+# The longest natural quiet gap seen in a month of recordings was ~21 minutes (3 am).
+DETECT_STALL_LIMIT=${DETECT_STALL_LIMIT:-1800}
 
 log() { echo "$(date '+%F %T') $*"; }
 
@@ -140,8 +145,15 @@ elif dead:
     print("SOME_DEAD " + ", ".join(dead))
 else:
     print("OK")
+
+# Second line, consumed by check 5: total inferences/sec, and how many cameras are
+# both producing frames and have detection enabled (i.e. could be feeding the detector).
+live = [c for c in cameras.values() if (c.get("camera_fps") or 0) and c.get("detection_enabled")]
+print("DETECT %.1f %d" % (sum(c.get("detection_fps") or 0 for c in cameras.values()), len(live)))
 PY
 )
+detect_state=$(printf '%s\n' "$stream_state" | sed -n '2p')
+stream_state=$(printf '%s\n' "$stream_state" | sed -n '1p')
 case "$stream_state" in
   ALL_DEAD*)
     # Frigate answers the API before the cameras produce their first frames, so
@@ -160,6 +172,36 @@ esac
 #    acted on. Restarting frigate here would only cost recordings for no gain.
 if ! tcp_ok "$DETECTOR_HOST" "$DETECTOR_PORT"; then
   log "WARN: detector endpoint $DETECTOR_HOST:$DETECTOR_PORT unreachable -- object detection is stopped (recording unaffected). Restart FrigateDetector.app on the host."
+  exit 0
+fi
+
+# 5. Detection wedged inside Frigate. When Frigate's watchdog force-kills a stuck
+#    detection process while the queue is empty, the kill leaks the queue's read
+#    lock and the replacement process never receives a frame: cameras keep their
+#    fps, the detector port stays open, and nothing is ever detected again. Only a
+#    Frigate restart clears it. detection_fps counts real detector replies only, so
+#    a sustained zero across every live camera is the signature. (With the detector
+#    app down the plugin answers with empty results, which still count -- so this
+#    never fires for a problem a restart cannot fix.)
+if [ -n "$detect_state" ]; then
+  read -r _ detect_fps detect_live <<< "$detect_state"
+  now=$(date +%s)
+  if [ "${detect_live:-0}" -eq 0 ] || [ "${detect_fps%.*}" -gt 0 ] || [ "${detect_fps#*.}" != "0" ]; then
+    # Detecting, or no camera is feeding the detector: (re)start the clock.
+    echo "$now" > "$DETECT_OK_FILE" 2>/dev/null
+  else
+    last_ok=$(cat "$DETECT_OK_FILE" 2>/dev/null)
+    case "$last_ok" in ''|*[!0-9]*) last_ok=$now; echo "$now" > "$DETECT_OK_FILE" 2>/dev/null ;; esac
+    # Never count time from before this container started.
+    if age=$(container_age) && [ "$last_ok" -lt $(( now - age )) ]; then
+      last_ok=$(( now - age ))
+    fi
+    stalled=$(( now - last_ok ))
+    if [ "$stalled" -ge "$DETECT_STALL_LIMIT" ]; then
+      unhealthy "no detections for $((stalled / 60)) min while $detect_live camera(s) are live -- detection process wedged; a restart will clear it"
+      exit $?
+    fi
+  fi
 fi
 
 exit 0
