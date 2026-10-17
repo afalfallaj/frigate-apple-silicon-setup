@@ -278,6 +278,13 @@ If you are upgrading from an older version of this setup, it is highly recommend
 
 ---
 
+## Disclaimer
+
+### *USE AT YOUR OWN RISK*
+This project is a personal hobby project provided for experimental purposes only. Its code is written and maintained with AI assistance rather than by hand line-by-line; it's reviewed before merging, but you should still read the source and test thoroughly in your own environment.
+
+---
+
 ## Acknowledgments
 
 Special thanks to [NickM-27/apple-silicon-detector](https://github.com/frigate-nvr/apple-silicon-detector) for providing the underlying NPU-accelerated CoreML detector implementation that this setup manager orchestrates.
