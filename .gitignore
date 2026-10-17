@@ -1,0 +1,62 @@
+# ============================================================
+# Frigate Apple Silicon — .gitignore
+# ============================================================
+
+# --- Legacy app bundle (prevent accidental inclusion) ---
+FrigateDetector.app/
+
+# --- Environment / Secrets ---
+.env
+*.env.local
+
+# --- Local agent instructions (private: may name personal terms to avoid) ---
+AGENTS.md
+CLAUDE.md
+
+# --- Local logs ---
+*.log
+*.old.log
+
+# --- Local database & media cache ---
+db/
+
+__pycache__/
+lib/__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# --- macOS artifacts ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Editor state ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Generated model outputs (large binaries) ---
+yolo/out/
+*.onnx
+*.pt
+config/model_cache/
+
+# --- Local Frigate states and configs ---
+config/*
+!config/config-example.yaml
+media/
+db/
+export/
+storage/
+web/
+
+# --- Docker artifacts ---
+# Note: docker-compose.yaml is generated from templates in docker/
+docker-compose.yaml
